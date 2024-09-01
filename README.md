@@ -1,1 +1,1 @@
-# modelling-network-structure
+# modelling-networks
