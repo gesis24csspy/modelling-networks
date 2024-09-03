@@ -1,0 +1,870 @@
+---
+title: "Network Analysis with Graph-Tool (Enron Email Network)"
+description: "Module 4, Introduction to Computational Social Science (Python), GESIS Fall Seminar 2024"
+author:
+  - name: John McLevey
+    url: https://johnmclevey.com
+    email: john.mclevey@uwaterloo.ca
+    corresponding: true
+    affiliations:
+      - name: University of Waterloo
+date: "08/26/2024"
+date-modified: last-modified
+categories:
+  - Python
+  - GESIS
+  - computational social science
+  - data science
+  - tutorial
+tags:
+  - Python
+  - GESIS
+  - computational social science
+  - data science
+  - tutorial
+bibliography: references.bib
+reference-location: margin
+citation-location: margin
+freeze: true
+license: "CC BY-SA"
+---
+
+- remove slide-stuff and use as notebook
+
+
+
+## Iterative Modelling
+
+:::: {.columns}
+::: {.column width="65%"}
+The Enron Email Network
+
+<br><br>
+
+We'll use `graph-tool` to
+
+- iteratively fit, improve, and compare Nested Stochastic Blockmodels by analyzing a directed email communication network between Enron employees
+- conduct rigorous posterior inference about the network from a generative modelling perspective
+
+[This will be a bit of a modelling marathon, so if all of this is new to you,<br>*focus on high-level logic*. Whether this is new to you or not, it will take a while for this content to really sink it. Give it time, take breaks, and come back to this material as often as you need to.]{.nord-light}
+:::
+
+::: {.column width="35%"}
+:::
+::::
+
+::: {.notes}
+In this tutorial, you'll learn how to use `graph-tool` to iteratively fit, improve, and compare Nested Stochastic Blockmodels (NSBMs) by analyzing a directed email communication network between Enron employees. You also learn how to conduct rigorous posterior inference about the network from a generative modelling perspective.
+
+The models we'll develop here start simple and gradually increase in complexity, incorporating additional information about the Enron network, or applying refinements to better estimate it's structure. We will visualize, assess, and compare these models, and finally, analyze the posterior distribution of block partitions to quantify uncertainty, compute marginal probabilities for node block assignments, and determine if there are other plausible explanations for the structure of our observed network.
+:::
+
+## Setup
+
+With the `gt` conda environment activated,
+
+```python
+import math
+import pickle
+import random
+from pprint import pprint
+
+import graph_tool.all as gt
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from sklearn.metrics import homogeneity_score
+
+import icsspy
+from icsspy.networks import (
+    get_consensus_partition_from_posterior,
+    plot_line_comparison,
+)
+from icsspy.paths import enron
+
+
+icsspy.set_style()
+print(f'Using graph-tool version {gt.__version__}')
+```
+
+> Using graph-tool version 2.77 (commit , )
+
+
+## Load the Enron Data
+
+We can load the Enron email data [@crick2022enron] from the `icsspy` course package. The network itself has already been prepared and can be loaded directly into `graph-tool`.
+
+<br><br>
+
+```python
+enron_email_network = str(enron / 'enron_graph.gt')
+g = gt.load_graph(enron_email_network)
+print(g)
+```
+
+> <Graph object, directed, with 149 vertices and 2582 edges, 2 internal vertex properties, 1 internal edge property, 1 internal graph property, at 0x105f8f740>
+
+##
+
+:::: {.columns}
+::: {.column width="45%"}
+Like the political blogs network, this network has internal property maps containing data about node and edge attributes, as well as the graph itself. We can list the available property maps:
+
+```python
+g.list_properties()
+```
+:::
+
+::: {.column width="10%"}
+:::
+
+::: {.column width="45%"}
+- `vertex_lookup` is an internal dictionary that maps each email address to a unique integer ID.
+- `label` is a string variable containing the email address.
+- `position` is a string variable containing information about the job position associated with the email account.
+- `edge weight` are counts of the number of emails that vertex $i$ sent vertex $j$ (since this is a directed network).
+:::
+::::
+
+
+## Prepare for Modelling
+
+Since we'll be creating a series of identical visualizations for each model, let's define a simple visualization function so we can avoid repeating ourselves. [☂︎](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)
+
+```python
+def draw_state(state, g, hvprops, heprops, filename=None):
+    state.draw(
+        vertex_text = g.vp['position'],
+        hvprops=hvprops,
+        heprops=heprops,
+        vertex_size=5,
+        output_size=(1200, 1200),
+        bg_color=[1, 1, 1, 1],
+        output=filename,
+)
+```
+
+<br>
+
+We'll also initialize a couple of empty dictionaries that we'll use to collect information about our models once they've been fit. The first will store each model's Minimum Description Length (MDL), the second will store homogeneity scores.
+
+```python
+model_mdl_scores = {}
+model_homogeneity_scores = {}
+```
+
+<!--
+## Minimum Description Length (MDL)
+
+- TODO: brief explanation slide here
+
+ -->
+
+## Model 1: A Nested SBM with Binary Edges
+
+<br>
+
+As before, let's start with a simple nested SBM and visualization. We'll use `gt.minimize_nested_blockmodel_dl()` with the default parameters, which is the same default nested SBM we fit in our analysis of the political blogs networks in the previous notebook. This model will select the best fitting posterior partition, where "best fitting" means the posterior partition with the shortest Minimum Description Length (MDL).
+
+<br>
+
+Since we have not passed an argument for edge weights, the model will treat this network as binary; the only information we are using to estimate the latent hierarchical block structure of this network is the presence or absence of edges.
+
+```python
+model_1 = gt.minimize_nested_blockmodel_dl(g)
+```
+
+Now that we've fit the model, let's visualize the results.
+
+
+## Model 1: A Nested SBM with Binary Edges
+
+:::: {.columns}
+::: {.column width="65%"}
+
+<br>
+
+```python
+hvprops = {"fill_color": "black", "size": 30}
+heprops = {"color": "black", "pen_width": 2}
+draw_state(state=model_1, g=g, hvprops=hvprops, heprops=heprops)
+```
+
+<br>
+
+$\longrightarrow$<br>
+You can't read the labels, but there is some apparent clustering of job titles into blocks. **How might formal positions generate different relational patterns in workplace communication networks?**
+:::
+
+::: {.column width="5%"}
+:::
+
+::: {.column width="30%"}
+![Model 1 Hierarchical Structure](../notebooks/4-computational-network-analysis/output/enron_model_1.png){width=100% #fig-enron_model_1}
+:::
+::::
+
+::: {.notes}
+This visualization conveys a lot of information about the estimated network structure. Each node's job title is printed on the node (although you'll really have to squint to read it). You may notice that some blocks contain clusters of folks with the same or similar job titles. This makes some intuitive sense, especially when considered in terms of **positional network analysis** and the concept of **stochastic equivalence**. It's plausible, likely even, that the formal roles people hold in the organization generate different relational patterns, however noisy, and that these patterns would be picked up by the blockmodel.
+:::
+
+## Model 1: A Nested SBM with Binary Edges
+
+<br>
+
+To get a better sense of how homogeneous blocks are with respect to job titles, we can get the position labels from our internal property map `position` and compute a homogeneity score for the combination of job positions and block membership. To do so, we'll iterate over the vertices in the graph and collect the information we need from the appropriate property maps.
+
+<br>
+
+```python
+m1_l0_prop_map = model_1.levels[0].b # block assignment property map
+
+vertex_data = []
+for v in g.vertices():
+    vertex_data.append((int(v), g.vp.position[v], m1_l0_prop_map[v]))
+
+vertex_data = pd.DataFrame(vertex_data)
+vertex_data.columns = ["VertexID", "JobPosition", "M1BlockID"]
+```
+
+## Model 1: A Nested SBM with Binary Edges
+
+```python
+vertex_data.head(10)
+```
+
+<br>
+
+:::: {.columns}
+::: {.column width="49%"}
+{{< include ../notebooks/4-computational-network-analysis/output/vertex_data_1.md >}}
+
+...
+:::
+
+::: {.column width="2%"}
+:::
+
+::: {.column width="49%"}
+This is the first time we've looked block assignment data in this way. The sequence of integers used for block IDs is an artifact of `graph-tool`'s internal optimizations, which creates and then drops many empty blocks during the modelling process.  It doesn't matter since the numbers don't have any meaning -- they are just ID labels.
+:::
+::::
+
+
+## Model 1: A Nested SBM with Binary Edges
+
+We'll use `sklearn`'s homogeneity score to calculate the uncertainty (via entropy) of the job positions within each block ID. The closer the score is to 1, the more homogeneous the blocks are with respect to job titles.
+
+<br>
+
+```python
+m1_homogeneity = homogeneity_score(
+    vertex_data['JobPosition'], vertex_data['M1BlockID']
+)
+
+model_homogeneity_scores['Model 1'] = round(float(m1_homogeneity), 4)
+pprint(model_homogeneity_scores)
+```
+
+> {'Model 1': 0.3874}
+
+<br>
+Remember, this is not supervised learning! We are not *trying* to group nodes based on their job titles, we are just hypothesizing that at least some of the network structure is driven by the formal roles people in the network hold. In that sense, the score doesn't tell us anything about how good or bad our model is, but once we've fit a few more models we can compare homogeneity scores to see whether some models result in more homogeneous blocks than others, and whether patterns show up across models.
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+<br>
+
+We fit Model 1 using binary edges. In Model 2, we'll complicate things a wee bit by including edge weights, which are counts. Before we model our edges, let's get an initial sense of how they are distributed by plotting them as an [ECDF](https://en.wikipedia.org/wiki/Empirical_distribution_function) (basically a cumulative histogram).
+
+<br>
+
+```python
+sns.ecdfplot(g.ep.edge_weight.a)
+plt.xlabel("\nNo. of emails sent from $i$ to $j$")
+plt.ylabel("Proportion of edges\n")
+plt.title("EDCF of edge weights\nin the Enron email network\n", loc="left")
+plt.gca().xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'{int(x):,}')) # comma format the x-axis
+plt.savefig('output/enron_edge_weight_ecdf.png', dpi=300)
+```
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+:::: {.columns}
+::: {.column width="45%"}
+In the SBM framework, we can include edge weights as covariates in our generative model and assume that they are sampled from some probability distribution conditioned on the block partitions (i.e., a **prior distribution**).
+
+<br>
+
+Given that this data is over-dispersed (i.e., the variance is greater than the mean), a [Negative Binomial distribution](https://en.wikipedia.org/wiki/Negative_binomial_distribution) would be an appropriate choice to model these edges, but as of fall 2024 [it is not implemented in `graph-tool`](https://graph-tool.skewed.de/static/doc/demos/inference/inference.html#edge-weights-and-covariates). While we can extend the distributions available in `graph-tool` by applying transformations,^[For example, we could approximate the Negative Binomial distribution by using the Poisson distribution with a Gamma-distributed rate parameter. One way to do this would be to sample a rate parameter $\lambda$ from a Gamma distribution for each edge, use that parameter to sample the edge weight from the Poisson distribution, and then fit the SBM using the Poisson-distributed edge weights.] we'll keep things relatively simple here by modelling the edges with a [Poisson distribution](https://en.wikipedia.org/wiki/Poisson_distribution). This should still provide a reasonable approximation, though it may not do the best job of characterizing the heavy tail of the distribution. Be mindful of this model limitation!
+:::
+
+::: {.column width="10%"}
+:::
+
+::: {.column width="45%"}
+![As you can see, the edge weights are highly skewed with a heavy tail. Since these are *directed edges*, each edge is a count of the number of times $i$ sent an email to $j$. This means that most Enron employees in the dataset (~90%) did not send more than ~125 emails to any given person, but a minority of employees sent as many as ~2,000 emails to the same person!](../notebooks/4-computational-network-analysis/output/enron_edge_weight_ecdf.png){width=100% #fig-enron_edge_weight_ecdf}
+:::
+::::
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+<br>
+
+:::: {.columns}
+::: {.column width="45%"}
+We'll use the `minimize_nested_blockmodel_dl()` function again to fit Model 2, but this time we'll add an argument called `state_args`. `state_args` contains two important pieces of information:
+
+<br>
+
+- the edge weight property map, passed to `recs`, and
+- the probability distribution we want to use to model the edge weights, passed to `rec_types`.
+:::
+
+::: {.column width="10%"}
+:::
+
+::: {.column width="45%"}
+```python
+model_2 = gt.minimize_nested_blockmodel_dl(
+    g,
+    state_args = dict(
+        recs=[g.ep.edge_weight],
+        rec_types = ['discrete-poisson']
+    )
+)
+```
+:::
+::::
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+<br>
+
+:::: {.columns}
+::: {.column width="65%"}
+
+As we did with Model 1, let's plot the network's hierarchical block structure (using the same `hvprops` and `heprops` customization for our `draw_state()` function).
+
+<br>
+
+```python
+draw_state(model_2, g, hvprops, heprops)
+```
+:::
+
+::: {.column width="5%"}
+:::
+
+::: {.column width="30%"}
+![Model 2 Hierarchical Structure](../notebooks/4-computational-network-analysis/output/enron_model_2.png){width=100% #fig-enron_model_2}
+:::
+::::
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+We'll also add the new block assignments to the `vertex_data` dataframe we created above.
+
+```python
+m2_l0_prop_map = model_2.levels[0].b  # block assignment property map
+
+m2_vertex_data = {}
+for v in g.vertices():
+    m2_vertex_data[int(v)] = m2_l0_prop_map[v]
+
+vertex_data['M2BlockID'] = vertex_data['VertexID'].map(m2_vertex_data)
+```
+
+Remember that the integer block IDs are just labels; they aren't meaningful in any numerical sense. The labels that get assigned depend on the model itself, so it doesn't mean anything if a new model puts a node in a block with a different integer label. It may be the case that the node has been assigned to a different block, but the labels do not tell us if that is the case.
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+#### MDL and Homogeneity
+
+Visually (@fig-enron_model_2) we can already see that the inclusion of edge weights has changed the model's best estimate of the latent block structure. What did it do the MDL?
+
+```python
+m2_mdl = model_2.entropy()
+model_mdl_scores["Model 2"] = int(round(m2_mdl))
+pprint(model_mdl_scores)
+```
+
+> {'Model 1': 6379, 'Model 2': 25982}
+
+The MDL score is much higher! However, *this is to be expected*, as the jump from a binary to a weighted network requires a huge increase in bits to adequately compress the network. We'll see how this model compares to the other weighted models we'll fit below.
+
+::: {.notes}
+MDL is Always Larger for Models with Edge Weights and Other Covariates
+Recall that MDL is computed by compressing the model *and* the data. Models with more parameters will always have larger MDLs, and models with edge weights always have more parameters than binary networks. Weighted networks contain more information than binary networks, and therefore require more bits to compress.
+
+Although MDL is a model-agnostic way of comparing model fits, this doesn't mean that the models using binary edges are to be preferred over weighted networks. We want to strike a good balance between having simple parsimonious models on the one hand and models that are complex enough to adequately explain our data on the other hand. This will often mean that, given the choice, we'll want to a select models with the lowest MDL given a set of models that sufficiently capture our network, and it may be that models of binary networks are not considered sufficient when compared to their weighted counterparts. This is a matter of judgement.
+:::
+
+
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+<br>
+
+Let's plot the MDLs for the models we've fit so far for easy comparison (@fig-model_comparison_mdl_M1_M2). We'll use the `plot_line_comparison()` function from the `icsspy` course package.
+
+<br>
+
+```python
+plot_line_comparison(
+    models_dict=model_mdl_scores,
+    title="Model Comparison\nMinimum Description Length (MDL)\n",
+    xlabel="\nMDL",
+    padding=5_000,
+    filename = 'output/model_comparison_mdl_M1_M2.png')
+```
+
+<br>
+
+![Models 1 and 2 MDL Comparison](../notebooks/4-computational-network-analysis/output/model_comparison_mdl_M1_M2.png){width=60% #fig-model_comparison_mdl_M1_M2}
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+What about the homogeneity of job titles within blocks?
+
+```python
+m2_homogeneity = homogeneity_score(
+    vertex_data['JobPosition'], vertex_data['M2BlockID']
+)
+
+model_homogeneity_scores['Model 2'] = round(float(m2_homogeneity), 4)
+pprint(model_homogeneity_scores)
+```
+
+> {'Model 1': 0.3985, 'Model 2': 0.4781}
+
+When we model edge weights rather than just presence/absence, the best posterior partition aligns more closely with the formal job descriptions themselves.
+
+
+## Model 2: A Nested SBM with Edge Weights
+
+<br>
+
+Let's plot these as well.
+
+<br>
+
+```python
+plot_line_comparison(
+    models_dict=model_homogeneity_scores,
+    title="Model Comparison\nBlock homogeneity wrt formal job titles\n",
+    xlabel="\nHomogeneity",
+    xrange=(0, 1),  # homogeneity scores range from 0 to 1
+    print_decimals=True,
+    filename = 'output/model_comparison_homogeneity_M1_M2.png')
+```
+
+<br>
+
+![Models 1 and 2 homogeneity scores](../notebooks/4-computational-network-analysis/output/model_comparison_homogeneity_M1_M2.png){width=60% #fig-model_comparison_homogeneity_M1_M2}
+
+## Model 3: Weighted, Poisson-distributed, Refined
+
+Once again, we are modelling our edges as Poisson-distributed. The difference between Models 2 and 3 is that Model 3 includes some additional **r**efinements on the partition we found with Model 2. Let's take a moment to understand what this means.
+
+<br>
+
+#### Why Refine Nested SBMs?
+
+Minimizing a model's description length is equivalent to maximizing it's posterior probability. In theory, when we find a good partition with minimal description length, we've also found the partition with maximum posterior probability. But this isn't always the case, as our search space -- the posterior distribution of all possible partitions -- is vast and complex. It's possible that the partition we find with `minimize_nested_blockmodel_dl()` came from a local minima rather than the global minima. If it came from a local minima, it may be very good but not the best.
+
+<br>
+
+To improve out estimates, we'll further explore the posterior distribution, enough to escape any local minima and to find the global minima. This involves making iterative refinements using Markov Chain Monte Carlo (MCMC) sampling. We sample from our posterior distribution to find partitions that further lower MDL and maximize posterior probability. This process *starts* with our initial partition, rather than randomly, which makes the MCMC sampling process in `graph-tool` very efficient.
+
+::: {.notes}
+In short, you can think of the initial partition returned from the `minimize_nested_blockmodel_dl()` function as the best guess about the best partition, and the refined estimate as the best partition,^[Well, unless you count the partition in the next model as a single partition, in which case this would probably be the second best guess!] identified by more thoroughly exploring the posterior distribution.
+
+How do we do this in `graph-tool`? In short, we want to run a merge-split MCMC refinement algorithm multiple times, each time storing the resulting blockstates and description lengths. At the end, we select the model with the shortest description length. Let's fit Model 3!
+:::
+
+
+## Model 3: Weighted, Poisson-distributed, Refined
+
+<br>
+
+Since this model is a refinement of Model 2, we use Model 2 as a base and accept new partitions only if they have shorter description lengths than the Model 2 partition.
+
+```python
+model_3 = model_2.copy() # will update if there are improvements to be had
+m3_mdl = model_2.entropy()
+
+num_refinements = 10 # no. of times to refine the initial state using merge-split MCMC
+num_mcmc_calls = 2_000 # no. of times to call multiflip_mcmc_sweep within a refinement loop
+num_mcmc_iters_per_call = 10 # no. iterations to perform per single multiflip_mcmc_sweep call
+
+for _ in range(num_refinements):
+    temp_state = model_2.copy()
+    for _ in range(num_mcmc_calls):
+        temp_state.multiflip_mcmc_sweep(beta=np.inf, niter=num_mcmc_iters_per_call)
+
+    if temp_state.entropy() < m3_mdl:
+        model_3 = temp_state
+        m3_mdl = temp_state.entropy()
+
+# draw the model
+draw_state(state=model_3, g=g, hvprops=hvprops, heprops=heprops)
+```
+
+::: {.notes}
+That code block will take a while to run. As you wait for it to finish, let's unpack the code a bit. Above, we set three variables that have a massive impact on how extensively we search the posterior distribution: `num_refinements`, `num_mcmc_calls`, and `num_mcmc_iters_per_call`. Let's break down what each of these are, and how they work together to influence our search.
+
+The first parameter, `num_refinements`, represents the number of separate searches of the posterior distribution we will conduct. Each starts from the same initial state -- Model 2! -- but is independent from the other searches. By performing a number of independent searches, in this case {{ num_refinements }}, we make it much less likely that our final result comes from a local minima.
+
+The second, `num_mcmc_calls`, determines the number of times we call the `multiflip_mcmc_sweep()` function within a single refinement loop. If we set to `10_000`, each refinement loop will execute `multiflip_mcmc_sweep()` 10,000 times, and hence will explore more of the parameter space. Once again, this increases the chances of finding improvements for our partition.
+
+Finally, `num_mcmc_iters_per_call` determines the number of iterations that `multiflip_mcmc_sweep()` performs in each individual call. Each iteration attempts to refine the current partition by proposing changes to the MCMC algorithm, and then either accepting or rejecting the change. When we increase this number, we again search the posterior distribution more thoroughly, increasing the chances of improving our partition.
+
+How thoroughly we search the posterior distribution depends on all three of these parameters. The larger the numbers we provide our three search parameters, the more thoroughly we search the posterior distribution, and the more likely we are to find refinements for our model. The cost, of course, is increased computation time.
+:::
+
+
+## Model 3: Weighted, Poisson-distributed, Refined
+
+:::: {.columns}
+::: {.column width="40%"}
+![Model 3 Hierarchical Structure](../notebooks/4-computational-network-analysis/output/enron_model_3.png){width=100% #fig-enron_model_3}
+:::
+
+::: {.column width="5%"}
+:::
+
+::: {.column width="55%" .fragment}
+Let's add M3 to the vertex dataframe.
+
+```python
+m3_l0_prop_map = model_3.levels[0].b  # block assignment property map
+
+m3_vertex_data = {}
+for v in g.vertices():
+    m3_vertex_data[int(v)] = m3_l0_prop_map[v]
+
+vertex_data['M3BlockID'] = vertex_data['VertexID'].map(m3_vertex_data)
+```
+:::
+::::
+
+
+
+## Model 3: Weighted, Poisson-distributed, Refined
+
+How does Model 3 compare to Models 1 and 2?
+
+<br>
+
+```python
+model_mdl_scores["Model 3"] = int(round(m3_mdl))
+pprint(model_mdl_scores)
+
+plot_line_comparison(
+    models_dict=model_mdl_scores,
+    title="Model Comparison\nMinimum Description Length (MDL)\n",
+    xlabel="\nMDL",
+    padding=5_000,
+    filename = 'output/model_comparison_mdl_M1_M2_M3.png')
+```
+
+<br>
+
+![Models 1-3 MDL Comparison](../notebooks/4-computational-network-analysis/output/model_comparison_mdl_M1_M2_M3.png){width=50% #fig-model_comparison_mdl_M1_M2_M3}
+
+
+## Model 3: Weighted, Poisson-distributed, Refined
+
+```python
+m3_homogeneity = homogeneity_score(
+    vertex_data['JobPosition'], vertex_data['M3BlockID']
+)
+
+model_homogeneity_scores['Model 3'] = round(float(m3_homogeneity), 4)
+pprint(model_homogeneity_scores)
+
+plot_line_comparison(
+    models_dict=model_homogeneity_scores,
+    title="Model Comparison\nBlock homogeneity wrt formal job titles\n",
+    xlabel="\nHomogeneity",
+    xrange=(0, 1),
+    print_decimals=True,
+    filename = 'output/model_comparison_homogeneity_M1_M2_M3.png')
+```
+
+<br>
+
+![Models 1-3 Homogeneity Comparison](../notebooks/4-computational-network-analysis/output/model_comparison_homogeneity_M1_M2_M3.png){width=50% #fig-model_comparison_homogeneity_M1_M2_M3}
+
+## Posterior Inference
+
+:::: {.columns}
+::: {.column width="60%"}
+In this next section of the notebook, we'll do two things that require more intensive analysis of the posterior distribution of block partitions.
+
+<br>
+
+**First**, we'll develop another Nested SBM that creates a "consensus partition" by averaging over a large sample of partitions from the posterior distribution, weighted by their posterior probabilities. This quantifies uncertainties in the blockmodelling process, including determining the number of blocks at each level, and block membership at each level (i.e. the block assignment marginal probabilities).
+
+<br>
+
+**Second**, we'll perform some additional analyses of the posterior distribution with the goal of figuring out whether it contains other high-probability partitions that could represent plausible competing explanations, or "data stories," for the network structure we've observed.
+:::
+::: {.column width="30%"}
+:::
+::::
+
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Model 4: Weighted, Poisson-distributed, Consensus Partition
+
+In Model 3, we refined the partition from Model 2 by more thoroughly searching the posterior distribution of partitions. Those refinements are *optimizations* of the Model 2 partition. In other words, we searched the posterior distribution for ways to improve our best guess about the best partition. We can improve our analysis even further by **averaging over many posterior partitions**, weighted by their posterior probabilities, rather than attempting to find the single best fitting partition. This quantifies uncertainty in our node-level block assignments and accounts for variability across many different but plausible partitions. We can use `get_consensus_partition_from_posterior` from the course package to simplify this process.
+
+<br>
+
+```python
+model_4 = get_consensus_partition_from_posterior(model_3, g, force_niter=2000)
+```
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Model 4: Weighted, Poisson-distributed, Consensus Partition
+
+<br>
+
+Let's take a look at our model's MDL, and compare it to Models 1-3.
+
+<br>
+
+```python
+m4_mdl = model_4.entropy()
+model_mdl_scores["Model 4"] = int(round(m4_mdl))
+
+plot_line_comparison(
+    models_dict=model_mdl_scores,
+    title="Model Comparison\nMinimum Description Length (MDL)\n",
+    xlabel="\nMDL",
+    padding=10_000,
+    filename = 'output/model_comparison_mdl_M1_M2_M3_M4.png')
+```
+
+![Models 1-4 MDL Comparison](../notebooks/4-computational-network-analysis/output/model_comparison_mdl_M1_M2_M3_M4.png){width=50% #fig-model_comparison_mdl_M1_M2_M3_M4}
+
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Model 4: Weighted, Poisson-distributed, Consensus Partition
+
+<br>
+
+The `get_consensus_partition_from_posterior()` function assigns each node to a block in the consensus partition (averages from partitions in the posterior weighted by posterior probability). We can extract that block information to consider homogeneity with respect to job titles for this model (below).
+
+<br>
+
+As we go through the usual process below, we'll also extract information from a newly created internal property map that contains counts the times each node was assigned to each partition in our posterior samples. We can normalize these counts to get the each node's marginal probability for it's block assignment. We'll store that information in our `vertex_data` dataframe as well and will look at it shortly.
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Model 4: Weighted, Poisson-distributed, Consensus Partition
+
+<br>
+
+```python
+m4_l0_prop_map = model_4.levels[0].b
+marginal_counts_consensus_partition = g.vertex_properties["pv"]
+
+m4_vertex_assignments = {}
+m4_vertex_marginal_probs = {}
+
+for v in g.vertices():
+    assigned_block = m4_l0_prop_map[v]
+    m4_vertex_assignments[int(v)] = assigned_block
+    # get the count for the assigned block
+    count_of_assigned_block = marginal_counts_consensus_partition[v][assigned_block]
+    # normalize the count to get the probability
+    total_count = sum(marginal_counts_consensus_partition[v])
+    prob_of_assigned_block = count_of_assigned_block / total_count
+    m4_vertex_marginal_probs[int(v)] = prob_of_assigned_block
+
+vertex_data['M4BlockID'] = vertex_data['VertexID'].map(m4_vertex_assignments)
+vertex_data['MargProbsConsPart'] = vertex_data['VertexID'].map(m4_vertex_marginal_probs)
+```
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Model 4: Weighted, Poisson-distributed, Consensus Partition
+
+{{< include ../notebooks/4-computational-network-analysis/output/vertex_data_M1-M4.md >}}
+
+
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Model 4: Weighted, Poisson-distributed, Consensus Partition
+
+What do our homogeneity look like now, using the consensus partition?
+
+```python
+m4_homogeneity = homogeneity_score(
+    vertex_data['JobPosition'], vertex_data['M4BlockID']
+)
+
+model_homogeneity_scores['Model 4'] = round(float(m4_homogeneity), 4)
+
+plot_line_comparison(
+    models_dict=model_homogeneity_scores,
+    title="Model Comparison\nBlock homogeneity wrt formal job titles\n",
+    xlabel="\nHomogeneity",
+    xrange=(0, 1),
+    print_decimals=True,
+    filename = 'output/model_comparison_homogeneity_M1_M2_M3_M4.png')
+```
+
+![Models 1-4 Homogeneity Comparison](../notebooks/4-computational-network-analysis/output/model_comparison_homogeneity_M1_M2_M3_M4.png){width=50% #fig-model_comparison_homogeneity_M1_M2_M3_M4}
+
+
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Model 4: Weighted, Poisson-distributed, Consensus Partition
+
+We can also use the `pv` property map to change the appearance of the nodes in our visualizations to fractions of a pie, reflecting the marginal probabilities of block assignments. We won't use our `draw_state()` function this time, since we're using some new arguments that we didn't include in that function: `vertex_shape` and  `vertex_pie_fractions`.
+
+```python
+hvprops['size'] = 15
+
+model_4.draw(
+    vertex_shape="pie",
+    vertex_pie_fractions=g.vp['pv'],
+    hvprops=hvprops,
+    heprops=heprops,
+)
+```
+
+##
+
+![Models 4 with marginal probabilities of block assignments. If you look at the nodes in the observed network, you'll see that most are a solid color, not pie fractions. That is because our model is *very* confident that most nodes are classified into the best partition. In general, this is looking good.](../notebooks/4-computational-network-analysis/output/enron_model_4.png){width=45% #fig-enron_model_4}
+
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Competing Explanations?
+
+When developing generative models, the posterior distribution may contain multiple explanations of the network structure with nearly equal probability. This is exactly why Bayesian generative modelling emphasizes analysis of the *full* posterior distribution rather than selecting a single best estimate.
+
+<br>
+
+In the case of SBMs, even when we create a consensus partition from the posterior, we may still want to know whether the posterior contains clusters of similar partitions that differ from the one we selected, but which are still very plausible. Each these different partitions may be offering different generative explanations of the observed network, which is definitely something we would want to know!
+
+<br>
+
+To determine whether this is the case, we can infer the modes of the posterior distribution to identify clusters of graph partitions that are similar to one another but different from those in other clusters (see [Peixoto (2021)](https://journals.aps.org/prx/pdf/10.1103/PhysRevX.11.021003)).
+
+
+
+##
+
+[Posterior Inference]{.nord-light}
+
+### Competing Explanations?
+
+```python
+n_partitions_sample = 5000 # the larger the number, the more accurate the estimates
+
+state = gt.NestedBlockState(g) # initialize
+gt.mcmc_equilibrate(state,
+    force_niter=1000,
+    mcmc_args=dict(niter=10)
+)
+
+bs = []
+
+def collect_partitions(s):
+   global bs
+   bs.append(s.get_bs())
+
+gt.mcmc_equilibrate(state,
+    force_niter=n_partitions_sample,
+    mcmc_args=dict(niter=10),
+    callback=collect_partitions
+)
+
+# infer partition modes in posterior
+pmode = gt.ModeClusterState(bs, nested=True)
+
+# minimize the mode state itself
+gt.mcmc_equilibrate(pmode, wait=1, mcmc_args=dict(niter=1, beta=np.inf))
+
+# get inferred modes
+modes = pmode.get_modes()
+
+for i, mode in enumerate(modes):
+    b = mode.get_max_nested()    # mode's maximum
+    pv = mode.get_marginal(g)    # mode's marginal distribution
+
+    print(f"Mode {i} with size {mode.get_M()/len(bs)}")
+    state = state.copy(bs=b)
+    state.draw(
+        vertex_shape="pie",
+        vertex_pie_fractions=pv,
+        output_size=(1200, 1200),
+        output=f"output/enron-partition-mode-{i}.png")
+```
+
+
+:::{.fragment}
+> Mode 0 with size 1.0
+
+😎 We don't have competing explanations in our posterior distribution! While there are minor differences in the partitions -- as we've seen from our initial models in this notebook -- there are no competing clusters with comparable high probability.
+:::
+
+::: {.notes}
+This code will list each mode in the posterior along with the [collective posterior probability of the partitions in each mode]{.kn-pink}. The number of modes detected will depend on the posterior distribution for any given network, but of course the probabilities of all the modes combined will sum to 1. It will also create a series of plots, one for each mode in the posterior, that plots the marginal node block assignment probabilities by drawing the nodes as small pie charts, just like we did above. If there are multiple modes, this will help us compare the different stories or explanation that each partition tells.
+:::
+
+##
+
+:::: {.columns}
+::: {.column width="55%"}
+<br><br>
+
+[😮‍💨 😎]{.large-text}
+
+The notebook `3-youtube-entities.ipynb` contains some data analysis and modelling challenges for you to practice your new generative modelling skills.
+
+<br>
+
+Tomorrow, we'll develop your generative modelling toolkit to include simulation and agent-based modelling!
+:::
+::: {.column width="45%"}
+:::
+::::

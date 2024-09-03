@@ -12,6 +12,8 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 
 ENV PATH="/root/.local/bin:$PATH"
 
+
+RUN mkdir -p /workspace
 RUN echo "Contents of the build context:" && ls -la /workspace
 
 
