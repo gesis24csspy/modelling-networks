@@ -1,0 +1,9 @@
+{
+	"name": "graph-tool",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": "."
+	},
+	"postCreateCommand": "poetry install",
+	"remoteUser": "root"
+}
