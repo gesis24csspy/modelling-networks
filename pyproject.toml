@@ -13,6 +13,8 @@ numpy = "^2.1.1"
 seaborn = "^0.13.2"
 scikit-learn = "^1.5.1"
 pyprojroot = "^0.3.0"
+mesa = "^2.3.3"
+networkx = "^3.3"
 
 
 
