@@ -31,8 +31,6 @@ license: "CC BY-SA"
 
 ## Setup
 
-With the `gt` Conda environment activated,
-
 ```{python}
 import numpy as np
 import graph_tool.all as gt
@@ -42,8 +40,6 @@ from icsspy.networks import rotate_positions
 print(f'Using graph-tool version {gt.__version__}')
 ```
 
-> Using graph-tool version 2.77 (commit , )
-
 Load the data.
 
 ```{python}
@@ -51,41 +47,17 @@ g = gt.collection.data["polblogs"]
 print(g)
 ```
 
-> <Graph object, directed, with 1490 vertices and 19090 edges, 4 internal vertex properties, 2 internal graph properties, at 0x16932af00>
-
-##
-
 
 ```{python}
 print(g.gp.readme)
 ```
-:::
 
-> Political blogosphere Feb. 200
-> Data compiled by Lada Adamic and Natalie Glanc
->
-> Node "value" attributes indicate political leaning according to
->
->   0 (left or liberal
->   1 (right or conservative
->
-> Data on political leaning comes from blog directories as indicated. Some blogs were labeled manually, based on incoming and outgoing links and posts around the time of the 2004 presidential election.  Directory-derived labels are prone to error; manual labels even more so.
->
-> Links between blogs were automatically extracted from a crawl of the front page of the blog.
->
-> These data should be cited as Lada A. Adamic and Natalie Glance, "The political blogosphere and the 2004 US Election", in Proceedings of the WWW-2005 Workshop on the Weblogging Ecosystem (2005).
-:::
-::::
 
 ## Property Maps
-
 
 ```{python}
 type(g.vp.value)
 ```
-
-> graph_tool.VertexPropertyMap
-
 
 We can look up the political class for any given node by passing its integer ID. For example, vertex 30:
 
@@ -93,23 +65,12 @@ We can look up the political class for any given node by passing its integer ID.
 g.vp.value[30]
 ```
 
-
 To view all classifications, we can iterate over the vertices and print each vertex ID followed by its class label:
 
 ```{python}
 for v in g.vertices():
     print(v, g.vp.value[v])
 ```
-:::
-
-
-:::
-::::
-
-##
-
-
-We can iterate over the vertices to map political labels to colors and store the results in an internal property map, `vertex_political_colors`. To match the original figure, we'll use <span style="color: #D72F32;">#D72F32</span> for right-conservative (Republicans) and <span style="color: #2F357E;">#2F357E</span> for left-liberal (Democrats).
 
 
 ```{python}
@@ -121,13 +82,7 @@ for v in g.vertices():
     vertex_political_colors[v] = political_colors[g.vp.value[v]]
 ```
 
-
-##
-
-
-
 As a first step, let's recreate the political blogs figures we've seen so far (including those based on the nested SBM). We'll assign node positions using the **stable force directed placement** function, `sfdp_layout()`. This will more-or-less recreate the force directed layout from the original.
-
 
 ```{python}
 pos = gt.sfdp_layout(g)
@@ -140,16 +95,6 @@ gt.graph_draw(
     inline=True
 )
 ```
-:::
-
-![We could ignore isolates and rotate the graph's position.](../notebooks/4-computational-network-analysis/output/polblogs_0.png){width=100% #fig-polblogs_0}
-:::
-::::
-
-
-##
-
-
 
 
 Let's just focus on the giant component for a cleaner visualization. We'll also rotate the graph's position to match the figures more closely.
@@ -168,16 +113,6 @@ gt.graph_draw(
     inline=True
 )
 ```
-:::
-
-
-![The giant component.](../notebooks/4-computational-network-analysis/output/polblogs_2.png){width=100% #fig-polblogs_2}
-:::
-::::
-
-
-##
-
 
 Next, we fit an SBM and color the nodes based on their estimated block membership.
 
@@ -186,13 +121,6 @@ blockstate = gt.minimize_nested_blockmodel_dl(giant)
 blockstate_level_0 = blockstate.levels[0]
 blockstate_level_0
 ```
-
-> <BlockState object with 793 blocks (18 nonempty), degree-corrected, for graph <GraphView object, directed, with 793 vertices and 15841 edges, 4 internal vertex properties, 2 internal graph properties, edges filtered by (<EdgePropertyMap object with value type 'bool', for Graph 0x17f9fd6d0, at 0x30299f1a0>, False), vertices filtered by (<VertexPropertyMap object with value type 'bool', for Graph 0x17f9fd6d0, at 0x302903470>, False), at 0x17f9fd6d0>, at 0x3029612e0>
-
-
-
-##
-
 
 
 We can use the `.draw()` method for blockstate objects.
@@ -203,18 +131,9 @@ blockstate_level_0.draw(
     output_size=(1200, 1200)
 )
 ```
-:::
 
-![The default force-directed layout with a Nested SBM for community detection.](../notebooks/4-computational-network-analysis/output/polblogs_3.png){width=100% #fig-polblogs_3}
-:::
-::::
-
-
-
-##
 
 Another figure more-or-less recreated! Two more to go.
-
 
 Let's modify the force directed layout to add attractive forces for block membership.
 
@@ -222,7 +141,6 @@ Let's modify the force directed layout to add attractive forces for block member
 pos_refined = gt.sfdp_layout(g, groups=blockstate_level_0.b, gamma=.04)
 pos_refined = rotate_positions(pos_refined, 125) # make it horizontal
 ```
-
 
 Then we can visualize the blockstate again.
 
@@ -235,53 +153,27 @@ blockstate_level_0.draw(
 )
 ```
 
-::: {.notes}
 As a refinement step **based on model criticism**, we'll adjust the force-directed layout by adding an attractive force between nodes in the same block. This is done by passing the following arguments to `sfdp_layout()`:
 
 - `groups`: A vertex property map that assigns nodes to specific groups, in this case, block assignments at the lowest level of the nested SBM (`blockstate_level_0.b`). This adds additional attractive forces for block membership in the layout.
 - `gamma`: Controls the strength of the attractive force for nodes in the same block. A small value corresponds to a weak force and more spread out clusters, while a larger value results in more compact clusters.
 
 We'll pass `blockstate_level_0.b` (block assignments) to `sfdp_layout()`. The `.b` attribute provides access to the block assignments.
-:::
-
-
-
-##
-
-![Let's rotate the graph and then re-draw it.](../notebooks/4-computational-network-analysis/output/polblogs_4.png){width=45% #fig-polblogs_4}
 
 ```{python}
 pos_refined = rotate_positions(pos_refined, 45)
 ```
 
-
-##
-
-![😌 Look at that!](../notebooks/4-computational-network-analysis/output/polblogs_5.png){width=60% #fig-polblogs_5}
-
-
-##
+😌 Look at that!
 
 
 ### Adjusting Node Colors& Exploring Hierarchy
 
-
 For the final adjustment, let's assign node colors based on political classification rather than block membership and use a layout that is designed to emphasize the hierarchical structure of the network. Even though we are dropping back down to two colors, the block structure will still be evident from the layout and we should be able to how well the binary classification lines up with the hierarchical blockmodel.
-:::
-
-
-:::
-::::
-
-
-
-##
-
 
 ### Divided They Blog?
 
 What do you think?
-
 
 ```{python}
 blockstate.draw(
@@ -291,28 +183,16 @@ blockstate.draw(
     inline=True,
 )
 ```
-:::
 
 
-![We could still improve this...](../notebooks/4-computational-network-analysis/output/polblogs_7.png){#fig-polblogs_7}
-:::
-::::
-
-::: {.notes}
 This visualization reveals the hierarchical structure more clearly. It's a bit tough to see right now, but the blue square node right in the middle of the network represents the entire graph merged into one group at the highest level of the block hierarchy. As you move outward from the center, the graph splits into smaller and smaller blocks, which correspond to different political blogs at the lowest level of the block hierarchy.
 
 You may notice that the nested SBM reveals a more complex structure than a simple left-right division. The hierarchy shows internal differentiation within each political cluster, revealing sub-communities that were not as apparent in the force-directed layout. However, we can see a clear split into two groups at the highest-level below the full graph that does align with the binary classifications.
-:::
-
-
-
-##
 
 
 ### Divided They Blog?
 
 Let's tweak the appearance of the block-level graph to make it easier to see and more visually appealing. We will modify the properties of the hierarchical block nodes and edges using `hvprops` (hierarchical vertex properties) and `heprops` (hierarchical edge properties).
-
 
 ```{python}
 hvprops = {
@@ -334,26 +214,17 @@ blockstate.draw(
     inline=True,
 )
 ```
-:::
 
 
-![Much better!](../notebooks/4-computational-network-analysis/output/polblogs_8.png){#fig-polblogs_8}
-:::
-::::
+With that, we've successfully recreated the series of political blog network figures from the lecture using `graph-tool`. We learned how to run `graph-tool` code in a conda environment, extracted the giant component, fit our first nested Stochastic Blockmodel (NSBM), and created a series of visualizions of the network and it's hierarchical block structure. We also learned how to adjust force_directed layouts to add additional attractors for group memberships based on simple model criticism, and how to modify and refine the visual properties of networks at different levels of the block hierarchy.
 
-::: {.notes}
-##
+In the next part of the tutorial, we'll explore the Enron email networks, applying similar techniques and deepening our understanding of community detection in large networks. We'll fit different kinds of models to different kinds of network representations and then rank the models based on their description lengths. As a bonus, we will compare these to results from modularity-maximization approaches (which you should not use).
+
+
+
 
 We just
 
 - recreated the figures
 - fit and visualized our first Nested Stochastic Blockmodel
 - learned how to modify the observed and hierachical networks in `graph-tool` visualizations
-
-#### When you're ready, let's start the second tutorial notebook!
-
-::: {.notes}
-With that, we've successfully recreated the series of political blog network figures from the lecture using `graph-tool`. We learned how to run `graph-tool` code in a conda environment, extracted the giant component, fit our first nested Stochastic Blockmodel (NSBM), and created a series of visualizions of the network and it's hierarchical block structure. We also learned how to adjust force_directed layouts to add additional attractors for group memberships based on simple model criticism, and how to modify and refine the visual properties of networks at different levels of the block hierarchy.
-
-In the next part of the tutorial, we'll explore the Enron email networks, applying similar techniques and deepening our understanding of community detection in large networks. We'll fit different kinds of models to different kinds of network representations and then rank the models based on their description lengths. As a bonus, we will compare these to results from modularity-maximization approaches (which you should not use).
-:::
