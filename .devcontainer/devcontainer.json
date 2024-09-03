@@ -1,9 +1,23 @@
 {
 	"name": "graph-tool",
+	// "image": "tiagopeixoto/graph-tool",
 	"build": {
 		"dockerfile": "Dockerfile",
-		"context": "."
+		"context": ".."
 	},
 	"postCreateCommand": "poetry install",
-	"remoteUser": "root"
+	"remoteUser": "root",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"njpwerner.autodocstring",
+				"ms-toolsai.jupyter",
+				"ms-vscode-remote.remote-containers",
+				"quarto.quarto",
+				"ms-azuretools.vscode-docker",
+				"mechatroner.rainbow-csv"
+			]
+		}
+	}
 }

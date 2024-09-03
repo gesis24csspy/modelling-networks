@@ -44,7 +44,6 @@ print(f'Using graph-tool version {gt.__version__}')
 
 > Using graph-tool version 2.77 (commit , )
 
-
 Load the data.
 
 ```{python}
@@ -221,7 +220,7 @@ Let's modify the force directed layout to add attractive forces for block member
 
 ```{python}
 pos_refined = gt.sfdp_layout(g, groups=blockstate_level_0.b, gamma=.04)
-pos_refined = rotate(pos_refined, 125) # make it horizontal
+pos_refined = rotate_positions(pos_refined, 125) # make it horizontal
 ```
 
 

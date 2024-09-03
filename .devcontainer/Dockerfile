@@ -6,17 +6,18 @@ RUN pacman -Syu --noconfirm && \
     wget \
     curl \
     tree \
+    python-pip \
     base-devel
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
 ENV PATH="/root/.local/bin:$PATH"
+ENV PYTHONPATH="$PYTHONPATH:/usr/local/lib/python3.12/site-packages:/usr/lib/python3.12/site-packages"
 
+RUN curl -sS https://starship.rs/install.sh | sh -s -- -y \
+    && echo 'eval "$(starship init bash)"' >> /root/.bashrc \
+    && mkdir -p /workspace
 
-RUN mkdir -p /workspace
-RUN echo "Contents of the build context:" && ls -la /workspace
-
-
-# WORKDIR /workspace
-# COPY ../pyproject.toml ../poetry.lock ./
-# RUN poetry install --no-root
+WORKDIR /workspace
+COPY pyproject.toml poetry.lock ./
+RUN poetry install
