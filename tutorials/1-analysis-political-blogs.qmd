@@ -128,7 +128,8 @@ We can use the `.draw()` method for blockstate objects.
 ```{python}
 blockstate_level_0.draw(
     pos=pos,
-    output_size=(1200, 1200)
+    output_size=(1200, 1200),
+    bg_color=[1, 1, 1, 1],
 )
 ```
 
@@ -149,7 +150,8 @@ blockstate_level_0.draw(
     pos=pos_refined,
     edge_gradient=[],
     edge_color="#33333322",
-    output_size=(1200, 1200)
+    output_size=(1200, 1200),
+    bg_color=[1, 1, 1, 1],
 )
 ```
 
